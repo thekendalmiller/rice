@@ -1205,8 +1205,45 @@ namespace Rice::detail
 // =========   cpp_protect.hpp   =========
 
 #include <regex>
-#include <filesystem>
 #include <stdexcept>
+
+// Check which filesystem to include yet
+#ifndef INCLUDE_STD_FILESYSTEM_EXPERIMENTAL
+  #if defined(__cpp_lib_filesystem) // Check for feature test macro for <filesystem>
+    #define INCLUDE_STD_FILESYSTEM_EXPERIMENTAL 0
+  #elif defined(__cpp_lib_experimental_filesystem) // Check for feature test macro for <experimental/filesystem>
+    #define INCLUDE_STD_FILESYSTEM_EXPERIMENTAL 1
+  #elif !defined(__has_include) // We can't check if headers exist...Let's assume experimental to be safe
+    #define INCLUDE_STD_FILESYSTEM_EXPERIMENTAL 1
+  #elif __has_include(<filesystem>) // Check if the header "<filesystem>" exists
+    #ifdef _MSC_VER // If we're compiling on Visual Studio and are not compiling with C++17, we need to use experimental
+      #if __has_include(<yvals_core.h>) // Check and include header that defines "_HAS_CXX17"
+        #include <yvals_core.h>
+        #if defined(_HAS_CXX17) && _HAS_CXX17 // Check for enabled C++17 support
+          #define INCLUDE_STD_FILESYSTEM_EXPERIMENTAL 0 // We're using C++17, so let's use the normal version
+        #endif
+      #endif
+      #ifndef INCLUDE_STD_FILESYSTEM_EXPERIMENTAL // If the marco isn't defined yet, that means any of the other VS specific checks failed, so we need to use experimental
+        #define INCLUDE_STD_FILESYSTEM_EXPERIMENTAL 1
+      #endif
+    #else // #ifdef _MSC_VER - Not on Visual Studio. Let's use the normal version
+      #define INCLUDE_STD_FILESYSTEM_EXPERIMENTAL 0
+    #endif
+  #elif __has_include(<experimental/filesystem>) // Check if the header "<filesystem>" exists
+    #define INCLUDE_STD_FILESYSTEM_EXPERIMENTAL 1
+  #else // Fail if neither header is available with a nice error message
+    #error Could not find system header "<filesystem>" or "<experimental/filesystem>"
+  #endif
+
+  // We previously determined that we need the exprimental version
+  #if INCLUDE_STD_FILESYSTEM_EXPERIMENTAL
+    #include <experimental/filesystem>
+    namespace fs = std::experimental::filesystem;
+  #else // We have a decent compiler and can use the normal version
+    #include <filesystem>
+    namespace fs = std::filesystem;
+  #endif
+#endif // #ifndef INCLUDE_STD_FILESYSTEM_EXPERIMENTAL
 
 
 namespace Rice::detail
@@ -1247,7 +1284,7 @@ namespace Rice::detail
       {
         rb_exc_raise(rb_exc_new2(rb_eArgError, ex.what()));
       }
-      catch (std::filesystem::filesystem_error const& ex)
+      catch (fs::filesystem_error const& ex)
       {
         rb_exc_raise(rb_exc_new2(rb_eIOError, ex.what()));
       }
